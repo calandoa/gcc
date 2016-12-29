@@ -6481,6 +6481,37 @@ make_pass_thread_prologue_and_epilogue (gcc::context *ctxt)
 }
 
 
+/* Helper match_asm_constraints_1.  */
+static int
+constant_overlap_mentioned_p (const_rtx x, const_rtx in)
+{
+  const char *fmt;
+  int i, j;
+
+  if (CONST_INT_P (in))
+    return 0;
+
+  if (!CONSTANT_P (in))
+    return 0;
+
+  if (x == 0)
+    return 0;
+
+  if (x == in)
+    return 1;
+
+  fmt = GET_RTX_FORMAT (GET_CODE (x));
+  for (i = GET_RTX_LENGTH (GET_CODE (x)) - 1; i >= 0; i--)
+    {
+      if (fmt[i] == 'e')
+	 return constant_overlap_mentioned_p (XEXP (x, i), in);
+      else if (fmt[i] == 'E')
+	for (j = XVECLEN (x, i) - 1; j >= 0; j--)
+	  return constant_overlap_mentioned_p (XVECEXP (x, i, j), in);
+    }
+  return 0;
+}
+
 /* This mini-pass fixes fall-out from SSA in asm statements that have
    in-out constraints.  Say you start with
 
@@ -6615,7 +6646,8 @@ match_asm_constraints_1 (rtx_insn *insn, rtx *p_sets, int noutputs)
 	  SET_DEST (p_sets[j]) = replace_rtx (SET_DEST (p_sets[j]),
 					      input, output);
       for (j = 0; j < ninputs; j++)
-	if (reg_overlap_mentioned_p (input, RTVEC_ELT (inputs, j)))
+	if (reg_overlap_mentioned_p (input, RTVEC_ELT (inputs, j))
+	    || constant_overlap_mentioned_p (RTVEC_ELT (inputs, j), input))
 	  RTVEC_ELT (inputs, j) = replace_rtx (RTVEC_ELT (inputs, j),
 					       input, output);
 
